@@ -1,3 +1,59 @@
+## Final Implementation Decisions
+
+### 1. 기준 DB 파일
+실제 저장소에는 `data/sys_1000.db`가 존재하므로, KR PoC는 이를 기준으로 복사하여 `data/sys_100_kr.db`를 생성한다.  
+기존 계획서의 `sys_100.db` 언급은 모두 `sys_1000.db` 기준으로 해석한다.
+
+### 2. 기준 경로
+현재 GitHub 저장소 루트를 기준 경로로 사용한다.  
+문서의 `aicp_twinmarket/` 경로는 무시하고, 모든 경로는 repository root 기준으로 작성한다.
+
+### 3. 실험 기간
+초기 smoke test는 `2024-07-01`부터 `2024-07-05`까지로 한다.  
+본 실험은 이후 `2024-07-01`부터 `2024-07-31`까지 20거래일 내외로 진행한다.
+
+### 4. LLM 언어 정책
+프롬프트 설명은 한국어로 전환하되, 출력 JSON/YAML key는 기존 코드와 호환되도록 유지한다.  
+즉, 자연어 reasoning은 한국어 허용, 파싱에 필요한 key 이름은 변경하지 않는다.
+
+### 5. Community OFF 정의
+`use_community=False`일 때는 다음을 모두 스킵한다:
+- forum post 읽기
+- forum post 작성
+- like/repost/unlike 등 forum action
+- post score update
+- graph-based neighbor recommendation
+- social input 기반 belief update
+
+단, 다음은 유지한다:
+- 주가/기술지표 조회
+- top_user 뉴스 읽기
+- 뉴스 기반 belief update
+- buy/hold/sell 의사결정
+- 주문 매칭 및 DB 업데이트
+
+### 6. 단일종목 정책
+KR PoC에서는 모든 거래 가능 종목을 `["005930"]`으로 고정한다.  
+stock selection LLM 호출은 우회한다.  
+`hold`는 완전히 유효한 선택이며, 빈 주문 리스트도 정상 결과로 처리해야 한다.
+
+### 7. 가격 및 거래 단위
+KRX 가격제한은 단순화하여 전일 종가 기준 ±30%로 구현한다.  
+틱 단위 반올림은 이번 PoC에서는 구현하지 않는다.  
+거래 단위는 1주이며, 주문 수량은 항상 `max(1, int(quantity))`로 정규화한다.
+
+### 8. 소셜 그래프 초기화
+초기에는 TradingDetails가 비어 있으므로 belief similarity only로 그래프를 생성한다.  
+시뮬레이션이 진행되어 포지션이 생기면 보유비율 유사도 0.5 + belief 유사도 0.5를 사용한다.
+
+### 9. 결측치 처리
+`ps_ttm`, `dv_ttm`, `elg_amount_net` 등 외부 데이터에서 결측이 발생하면 0으로 채운다.  
+이 결정은 PoC 안정성을 위한 임시 처리이며, 추후 실제 재무 데이터 소스로 개선한다.
+
+### 10. stock_profile 처리
+KR PoC에서는 `STOCK_PROFILE_DICT`와 관련 stock profile 로직을 모두 삼성전자(005930) 단일종목 기준으로 통일한다.  
+기존 중국 인덱스 설명이 프롬프트에 재유입되지 않도록 한다.
+
 # TwinMarket KR PoC — 코드 수정 상세 계획
 
 ---
