@@ -1,4 +1,3 @@
-미안. 아래 전체를 그대로 `Code_Plan.md`에 **통째로 덮어쓰기** 하면 돼.
 
 ````md
 # TwinMarket KR PoC — 코드 수정 상세 계획
