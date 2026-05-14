@@ -47,7 +47,7 @@ KR PoC용 DB는 이를 복사하여 `data/sys_100_kr.db`로 생성한다.
 belief similarity 계산 시 최신 forum post나 belief 텍스트가 없으면 `util/belief/belief_100_kr.csv`의 초기 belief를 fallback으로 사용한다.  
 그래도 없으면 빈 문자열이 아니라 아래 neutral default belief 문장을 사용한다.
 
-```text
+
 삼성전자와 한국 주식시장에 대해 중립적인 관점을 유지하며, 현재 정보가 부족하여 추가 뉴스와 가격 흐름을 관찰한다.
 
 
