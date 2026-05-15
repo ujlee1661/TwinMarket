@@ -38,7 +38,7 @@ from util.UserDB import (
     load_graph,
     update_graph,
     save_graph,
-    build_graph_new,
+    build_graph_new_single_stock,
     get_top_n_users_by_degree,
 )
 from util.ForumDB import (
@@ -85,6 +85,7 @@ def process_user_input(
     activate_maapping,
     belief_args,
     config_path,
+    use_community,
 ):
     """
     处理单个用户的交易输入和决策过程
@@ -192,6 +193,7 @@ def process_user_input(
             config_path=config_path,  # API配置文件路径
             is_activate_user=is_activate_user,  # 用户是否激活
             belief=belief,  # 用户信念值
+            use_community=use_community,
         )
 
         # 调用交易代理的主要处理逻辑，获取交易决策和论坛互动结果
@@ -249,6 +251,10 @@ def init_simulation(
     top_n_user: float = 0.1,
     config_path: str = "./config/api.yaml",
     activate_prob: float = 1.0,
+    use_community: bool = True,
+    stock_data_path: str = "data/stock_data_kr.csv",
+    trading_days_path: str = "data/trading_days_kr.csv",
+    news_path: str = "data/samsung_news.pkl",
 ):
     """
     初始化并运行股票交易模拟系统
@@ -281,11 +287,11 @@ def init_simulation(
     init_system(current_date, user_db, forum_db)
 
     # 加载重要新闻数据（已按影响力排序）
-    df_news = pd.read_pickle("data/sorted_impact_news.pkl")
+    df_news = pd.read_pickle(news_path)
     df_news["cal_date"] = pd.to_datetime(df_news["cal_date"])
 
     # 加载交易日历数据，用于判断当日是否为交易日
-    df_trading_days = pd.read_csv("data/trading_days.csv")
+    df_trading_days = pd.read_csv(trading_days_path)
     df_trading_days["pretrade_date"] = pd.to_datetime(df_trading_days["pretrade_date"])
     trading_days = list(df_trading_days["pretrade_date"].unique())
 
@@ -447,7 +453,7 @@ def init_simulation(
 
         # ============================ 用户关系网络构建 ============================
         # 构建当前日期的用户关系网络图
-        current_user_graph = build_graph_new(
+        current_user_graph = build_graph_new_single_stock(
             similarity_threshold=similarity_threshold,  # 相似度阈值
             time_decay_factor=time_decay_factor,  # 时间衰减因子
             db_path=user_db,  # 用户数据库路径
@@ -683,7 +689,8 @@ def init_simulation(
             )
 
             # 更新论坛帖子的评分（基于互动数据）
-            update_posts_score_by_date_range(
+            if use_community:
+                update_posts_score_by_date_range(
                 db_path=forum_db, end_date=current_date.strftime("%Y-%m-%d")
             )
 
@@ -839,3 +846,9 @@ if __name__ == "__main__":
         activate_prob=args.activate_prob,
     )
     print("\n=== 模拟系统运行完成 ===")
+    parser.add_argument("--use_community", type=lambda x: str(x).lower()=="true", default=True)
+    parser.add_argument("--stock_code", type=str, default="005930")
+    parser.add_argument("--stock_data_path", type=str, default="data/stock_data_kr.csv")
+    parser.add_argument("--trading_days_path", type=str, default="data/trading_days_kr.csv")
+    parser.add_argument("--news_path", type=str, default="data/samsung_news.pkl")
+

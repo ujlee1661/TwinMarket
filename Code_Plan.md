@@ -819,3 +819,9 @@ python simulation.py \
   - 원격 브랜치 `kr-samsung-poc`는 기존에 없어 로컬에서 신규 생성.
 - **다음 Stage 준비**:
   - Stage 2 진행 시 `--news_pkl`, `--information_db_dir` CLI 주입 경로를 런타임 코드에 연결 필요.
+
+#### ✅ 완료 노트 (2026-05-15)
+- **수행한 것**: Stage 2-1~2-6 반영을 위해 `trader/utility.py`, `trader/matching_engine.py`, `trader/trading_agent.py`, `trader/prompts.py`, `util/UserDB.py`, `simulation.py`를 수정했다.
+- **핵심 판단**: 단일종목 그래프는 우선 기존 `build_graph_new` 흐름을 감싸는 `build_graph_new_single_stock` 래퍼로 연결해 런타임 경로를 먼저 안정화했다.
+- **발견한 문제**: 시작 브랜치 `codex/implement-stage-1-1-to-stage-1-5`는 로컬에 없어 현재 작업 브랜치 기반으로 Stage 2 전용 브랜치를 생성했다.
+- **다음 Stage 준비**: Stage 3에서 `--use_community` ON/OFF 시 forum side-effect 및 단일종목 주문/hold 출력 포맷을 중점 검증 필요.

@@ -738,6 +738,25 @@ def build_graph_new(
         raise ValueError(f"Failed to build user similarity graph: {str(e)}")
 
 
+
+def build_graph_new_single_stock(
+    db_path: str = DB_PATH,
+    forum_db_path: str = "data/sample.db",
+    current_date: str = "2023-01-01",
+    similarity_threshold: float = 0.2,
+    save_name: str = "user_graph",
+    save: bool = True,
+) -> nx.Graph:
+    """단일종목 환경용 그래프 빌드 (간소화 버전)."""
+    return build_graph_new(
+        db_path=db_path,
+        start_date="2023-01-01",
+        end_date=current_date,
+        similarity_threshold=similarity_threshold,
+        save=save,
+        save_name=save_name,
+    )
+
 def update_graph(
     G: nx.Graph,
     start_date: str = "2023-01-01",
