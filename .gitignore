@@ -60,3 +60,6 @@ config/embedding.yaml
 # *.yml
 
 logs*/data/guba_data.csv
+.hf_cache/
+.mplconfig/
+.venv/

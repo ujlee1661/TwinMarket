@@ -1,5 +1,7 @@
 import argparse
 import pickle
+import pickletools
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -10,6 +12,7 @@ from sentence_transformers import SentenceTransformer
 
 
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _normalize_news_item(item: Any) -> List[str]:
@@ -31,8 +34,44 @@ def _normalize_news_item(item: Any) -> List[str]:
     return []
 
 
+def _read_news_pickle(input_pkl: Path) -> pd.DataFrame:
+    try:
+        return pd.read_pickle(input_pkl)
+    except (NotImplementedError, TypeError) as exc:
+        # Some pandas 3.x StringDtype pickles cannot be read by pandas 2.x.
+        # The bundled news file stores two logical columns only, so recover the
+        # date vector and the per-date news lists directly from pickle opcodes.
+        groups: List[List[str]] = []
+        current: List[str] | None = None
+        with open(input_pkl, "rb") as f:
+            for op, arg, _ in pickletools.genops(f.read()):
+                if op.name == "EMPTY_LIST":
+                    current = []
+                elif current is not None and op.name in {"BINUNICODE", "SHORT_BINUNICODE"}:
+                    current.append(str(arg))
+                elif op.name == "APPENDS" and current is not None:
+                    groups.append(current)
+                    current = None
+
+        date_group_index = next(
+            (i for i, group in enumerate(groups) if group and all(DATE_RE.match(x) for x in group)),
+            None,
+        )
+        if date_group_index is None:
+            raise ValueError(f"could not recover date column from {input_pkl}") from exc
+
+        dates = groups[date_group_index]
+        news_groups = groups[date_group_index + 1 : date_group_index + 1 + len(dates)]
+        if len(news_groups) != len(dates):
+            raise ValueError(
+                f"could not recover news column from {input_pkl}: dates={len(dates)} news={len(news_groups)}"
+            ) from exc
+
+        return pd.DataFrame({"cal_date": dates, "news": news_groups})
+
+
 def build_news(input_pkl: Path, output_pkl: Path, trading_days_csv: Path) -> pd.DataFrame:
-    df = pd.read_pickle(input_pkl)
+    df = _read_news_pickle(input_pkl)
     if "cal_date" not in df.columns or "news" not in df.columns:
         raise ValueError("input pkl must include cal_date and news columns")
 
