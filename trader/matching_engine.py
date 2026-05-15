@@ -1006,6 +1006,7 @@ def process_trading_day(
     df_stock: pd.DataFrame = None,
     df_stock_profile_real: pd.DataFrame = None,
     json_file_path: str = None,
+    real_data_path: str = "data/stock_data.csv",
 ):
     """
     处理单个交易日的完整交易流程
@@ -1061,6 +1062,7 @@ def process_trading_day(
         output_dir=output_dir,
         db_path=db_path,
         df_stock=df_stock,
+        real_data_path=real_data_path,
     )
 
     # 更新Tradingdetails表
@@ -1137,6 +1139,9 @@ def update_stock_data_table(
         if not os.path.exists(real_data_path):
             raise FileNotFoundError(f"历史交易数据文件 {real_data_path} 不存在")
         historical_data_real = pd.read_csv(real_data_path)
+        real_code_col = "ts_code" if "ts_code" in historical_data_real.columns else "stock_id"
+        real_close_col = "close" if "close" in historical_data_real.columns else "close_price"
+        historical_data_real[real_code_col] = historical_data_real[real_code_col].astype(str).str.zfill(6)
         historical_data_real["date"] = pd.to_datetime(historical_data_real["date"])
 
         # 连接数据库
@@ -1151,7 +1156,7 @@ def update_stock_data_table(
                 # 获取当日的真实交易数据作为基准
                 current_real_data = (
                     historical_data_real[
-                        (historical_data_real["ts_code"] == stock_code)
+                        (historical_data_real[real_code_col] == str(stock_code).zfill(6))
                         & (historical_data_real["date"] <= current_date)
                     ]
                     .sort_values("date", ascending=False)
@@ -1203,7 +1208,7 @@ def update_stock_data_table(
                     large_order_net = 0  # 没有大单资金流入
 
                 # 使用当日真实数据作为基准，根据模拟收盘价等比例计算估值指标
-                price_ratio = closing_price / current_real_data["close"]
+                price_ratio = closing_price / current_real_data[real_close_col]
                 new_pe_ttm = current_real_data["pe_ttm"] * price_ratio
                 new_pb = current_real_data["pb"] * price_ratio
                 new_ps_ttm = current_real_data["ps_ttm"] * price_ratio
@@ -1823,6 +1828,7 @@ def test_matching_system(
     json_file_path: str = None,
     db_path: str = None,
     base_path: str = ".",
+    real_data_path: str = "data/stock_data.csv",
 ):
     """
     交易撮合系统主测试函数
@@ -1896,11 +1902,15 @@ def test_matching_system(
                 df_stock_sim,
                 df_stock_profile_real,
                 json_file_path,
+                real_data_path,
             )
         else:
             update_profiles_table_holiday(current_date, db_path)
             update_stock_data_table_holiday(
-                current_date=current_date, db_path=db_path, df_stock=df_stock_sim
+                current_date=current_date,
+                db_path=db_path,
+                df_stock=df_stock_sim,
+                real_data_path=real_data_path,
             )
 
         print("\n===撮合交易完成===")
@@ -1936,6 +1946,9 @@ def update_stock_data_table_holiday(
         if not os.path.exists(real_data_path):
             raise FileNotFoundError(f"历史交易数据文件 {real_data_path} 不存在")
         historical_data_real = pd.read_csv(real_data_path)
+        real_code_col = "ts_code" if "ts_code" in historical_data_real.columns else "stock_id"
+        real_close_col = "close" if "close" in historical_data_real.columns else "close_price"
+        historical_data_real[real_code_col] = historical_data_real[real_code_col].astype(str).str.zfill(6)
         historical_data_real["date"] = pd.to_datetime(historical_data_real["date"])
 
         # 连接数据库
@@ -1950,7 +1963,7 @@ def update_stock_data_table_holiday(
                 # 获取当日的真实交易数据作为基准
                 current_real_data = (
                     historical_data_real[
-                        (historical_data_real["ts_code"] == stock_code)
+                        (historical_data_real[real_code_col] == str(stock_code).zfill(6))
                         & (historical_data_real["date"] <= current_date)
                     ]
                     .sort_values("date", ascending=False)
@@ -1974,7 +1987,7 @@ def update_stock_data_table_holiday(
                 price_change = closing_price - prev_data["close_price"]
 
                 # 使用当日真实数据作为基准，根据模拟收盘价等比例计算估值指标
-                price_ratio = closing_price / current_real_data["close"]
+                price_ratio = closing_price / current_real_data[real_close_col]
                 new_pe_ttm = current_real_data["pe_ttm"] * price_ratio
                 new_pb = current_real_data["pb"] * price_ratio
                 new_ps_ttm = current_real_data["ps_ttm"] * price_ratio

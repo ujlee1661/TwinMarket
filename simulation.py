@@ -118,6 +118,10 @@ def process_user_input(
         user_strategy = df_strategy[df_strategy["user_id"] == user_id].iloc[0][
             "strategy"
         ]
+        is_activate_user = activate_maapping[user_id]
+        if not is_activate_user:
+            return user_id, {}, {"error": "用户没有被激活"}, None
+
         # 判断是否为随机技术面交易者（非顶级用户且交易日且符合概率）
         is_random_trader = (
             user_strategy == "技术面"
@@ -141,7 +145,6 @@ def process_user_input(
         )
         # 设置用户状态标识
         is_top_user = user_id in top_user
-        is_activate_user = activate_maapping[user_id]
 
         # 获取用户信念值（从不同数据源根据日期获取）
         try:
@@ -284,7 +287,15 @@ def init_simulation(
     current_date = start_date
 
     # 清空数据库中未来日期的数据，确保模拟的一致性
-    init_system(current_date, user_db, forum_db)
+    init_system(current_date, user_db, forum_db, clean_forum=use_community)
+
+    stock_seed_df = pd.read_csv(stock_data_path)
+    stock_seed_df["stock_id"] = stock_seed_df["stock_id"].astype(str).str.zfill(6)
+    stock_seed_df["date"] = pd.to_datetime(stock_seed_df["date"])
+    stock_seed_df = stock_seed_df[stock_seed_df["date"] < current_date].copy()
+    stock_seed_df["date"] = stock_seed_df["date"].dt.strftime("%Y-%m-%d")
+    with sqlite3.connect(user_db) as conn:
+        stock_seed_df.to_sql("StockData", conn, if_exists="replace", index=False)
 
     # 加载重要新闻数据（已按影响力排序）
     df_news = pd.read_pickle(news_path)
@@ -349,6 +360,8 @@ def init_simulation(
 
         # 获取当前日期有效的所有用户ID
         all_user = get_all_user_ids(db_path=user_db, timestamp=current_date)
+        if node:
+            all_user = all_user[:node]
 
         # config_list = ['./config_random/deepseek_yyz.yaml',
         #                './config_random/deepseek_yyz2.yaml',
@@ -398,7 +411,7 @@ def init_simulation(
         # ============================ 用户信念值管理 ============================
         # 根据是否为第一天选择不同的信念值数据源
         belief_args = {}
-        if not day_1st:
+        if not day_1st and use_community:
             # 非第一天：从论坛数据库获取用户最新信念值
             belief_args = get_all_users_posts_db(
                 db_path=forum_db, end_date=current_date
@@ -452,24 +465,24 @@ def init_simulation(
             belief_args = df_init_belief
 
         # ============================ 用户关系网络构建 ============================
-        # 构建当前日期的用户关系网络图
-        current_user_graph = build_graph_new_single_stock(
-            similarity_threshold=similarity_threshold,  # 相似度阈值
-            time_decay_factor=time_decay_factor,  # 时间衰减因子
-            db_path=user_db,  # 用户数据库路径
-            start_date="2023-01-01",  # 图构建起始日期
-            end_date=current_date.strftime("%Y-%m-%d"),  # 图构建结束日期
-            save_name=f'{user_graph_save_name}_{current_date.strftime("%Y-%m-%d")}',  # 保存名称
-            save=True,  # 保存图文件
-        )
-        print(
-            f"用户关系图属性: {current_user_graph.number_of_nodes()} 个节点, {current_user_graph.number_of_edges()} 条边"
-        )
-
-        # 根据节点度数获取顶级用户列表
-        top_user = get_top_n_users_by_degree(
-            G=current_user_graph, top_n=int(node * top_n_user)
-        )
+        if use_community:
+            current_user_graph = build_graph_new_single_stock(
+                similarity_threshold=similarity_threshold,
+                db_path=user_db,
+                forum_db_path=forum_db,
+                current_date=current_date.strftime("%Y-%m-%d"),
+                save_name=f'{user_graph_save_name}_{current_date.strftime("%Y-%m-%d")}',
+                save=True,
+            )
+            print(
+                f"用户关系图属性: {current_user_graph.number_of_nodes()} 个节点, {current_user_graph.number_of_edges()} 条边"
+            )
+            top_user = get_top_n_users_by_degree(
+                G=current_user_graph, top_n=int(node * top_n_user)
+            )
+        else:
+            current_user_graph = None
+            top_user = []
 
         # ============================ 并发处理用户输入 ============================
         print(f"开始处理 {len(all_user)} 个用户，使用 {max_workers} 个工作线程...")
@@ -503,6 +516,7 @@ def init_simulation(
                     activate_maapping,
                     belief_args,
                     user_config_mapping[user_id],  # 传入用户对应的配置
+                    use_community,
                 )
                 for user_id in all_user
             ]
@@ -550,6 +564,7 @@ def init_simulation(
                         activate_maapping,
                         belief_args,
                         fallback_config_path,
+                        use_community,
                     )
                     try:
                         # 重试任务的结果处理
@@ -604,7 +619,7 @@ def init_simulation(
         # ============================ 论坛帖子处理 ============================
         # 统计成功创建的帖子数量
         successful_posts = 0
-        if post_args_list:
+        if use_community and post_args_list:
             print(f"开始处理 {len(post_args_list)} 个用户的帖子发布...")
             for user_id, post_response_args in post_args_list:
                 try:
@@ -648,6 +663,7 @@ def init_simulation(
                 base_path=log_dir,
                 db_path=user_db,
                 json_file_path=f"{log_dir}/trading_records/{current_date.strftime('%Y-%m-%d')}.json",
+                real_data_path=stock_data_path,
             )
         else:
             # 非交易日：仅更新用户资料表（不处理交易）
@@ -656,7 +672,7 @@ def init_simulation(
             )
 
         # ============================ 论坛互动处理 ============================
-        if not day_1st:
+        if not day_1st and use_community:
             # 非第一天：处理用户在论坛中的互动行为
             successful_actions = 0
             print(f"开始处理 {len(forum_args_list)} 个用户的论坛互动...")
@@ -689,8 +705,7 @@ def init_simulation(
             )
 
             # 更新论坛帖子的评分（基于互动数据）
-            if use_community:
-                update_posts_score_by_date_range(
+            update_posts_score_by_date_range(
                 db_path=forum_db, end_date=current_date.strftime("%Y-%m-%d")
             )
 
@@ -789,6 +804,31 @@ def parse_args():
     parser.add_argument(
         "--config_path", type=str, default="./config/api.yaml", help="API配置文件路径"
     )
+    parser.add_argument(
+        "--use_community",
+        type=lambda x: str(x).lower() == "true",
+        default=True,
+        help="是否启用论坛/社区功能",
+    )
+    parser.add_argument("--stock_code", type=str, default="005930", help="交易股票代码")
+    parser.add_argument(
+        "--stock_data_path",
+        type=str,
+        default="data/stock_data_kr.csv",
+        help="股票行情数据路径",
+    )
+    parser.add_argument(
+        "--trading_days_path",
+        type=str,
+        default="data/trading_days_kr.csv",
+        help="交易日历数据路径",
+    )
+    parser.add_argument(
+        "--news_path",
+        type=str,
+        default="data/samsung_news.pkl",
+        help="新闻数据路径",
+    )
 
     return parser.parse_args()
 
@@ -844,11 +884,9 @@ if __name__ == "__main__":
         belief_init_path=args.belief_init_path,
         config_path=args.config_path,
         activate_prob=args.activate_prob,
+        use_community=args.use_community,
+        stock_data_path=args.stock_data_path,
+        trading_days_path=args.trading_days_path,
+        news_path=args.news_path,
     )
     print("\n=== 模拟系统运行完成 ===")
-    parser.add_argument("--use_community", type=lambda x: str(x).lower()=="true", default=True)
-    parser.add_argument("--stock_code", type=str, default="005930")
-    parser.add_argument("--stock_data_path", type=str, default="data/stock_data_kr.csv")
-    parser.add_argument("--trading_days_path", type=str, default="data/trading_days_kr.csv")
-    parser.add_argument("--news_path", type=str, default="data/samsung_news.pkl")
-

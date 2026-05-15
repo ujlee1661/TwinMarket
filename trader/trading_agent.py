@@ -54,7 +54,7 @@ from .IndustryDict import *
 # 当前配置：使用配置文件管理
 INFORMATION_DB = InformationDB(
     config_path="config/embedding.yaml",  # 嵌入模型配置文件路径
-    database_dir="data/InformationDB_news_2023",  # 新闻数据库目录
+    database_dir="data/InformationDB_samsung",  # 新闻数据库目录
 )
 INFORMATION_DB.load_database()  # 加载新闻数据库
 
@@ -127,6 +127,7 @@ class PersonalizedStockTrader:
         config_path: str = None,
         is_activate_user: bool = True,
         belief: str = None,
+        use_community: bool = True,
     ):
         """
         初始化个性化股票交易代理
@@ -517,7 +518,7 @@ class PersonalizedStockTrader:
         self.conversation_history.append(self.user_prompt)
         self.conversation_history.append(agent_first_prompt)
 
-        if not day_1st:
+        if not day_1st and self.use_community:
             # 注意：ForumDB 内部按日期字符串比较，传入 end_date 为当前日可覆盖到前一日全量
             self.rec_post = recommend_post_graph(
                 target_user_id=self.user_id,
@@ -528,11 +529,8 @@ class PersonalizedStockTrader:
                 max_return=5,
             )
 
-            if self.use_community:
-                self.forum_args, self.forum_summary = self._forum_action()
-                print_debug(f"self.forum_args: {self.forum_args}", debug)
-            else:
-                self.forum_args, self.forum_summary = None, None
+            self.forum_args, self.forum_summary = self._forum_action()
+            print_debug(f"self.forum_args: {self.forum_args}", debug)
             self.conversation_history.append(
                 {"role": "user", "content": self.forum_summary}
             )
@@ -632,9 +630,12 @@ class PersonalizedStockTrader:
             # 发帖
             start_time = time.time()
             print_debug("Interacting with environment...", debug)
-            self.post_response_args = self._intention_agent(
-                current_date, self.conversation_history
-            )  # post, type, belief
+            if self.use_community:
+                self.post_response_args = self._intention_agent(
+                    current_date, self.conversation_history
+                )  # post, type, belief
+            else:
+                self.post_response_args = None
             print_debug(self.post_response_args, debug)
             print_debug(
                 f"与 environment 交互耗时: {time.time() - start_time:.2f}秒", debug

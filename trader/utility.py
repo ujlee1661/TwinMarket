@@ -940,7 +940,9 @@ async def rerank_documents_async(query, documents, timelines, top_n=2):
             return documents[:top_n], timelines[:top_n]
 
 
-def init_system(current_date: pd.Timestamp, db_path: str, forum_db: str) -> None:
+def init_system(
+    current_date: pd.Timestamp, db_path: str, forum_db: str, clean_forum: bool = True
+) -> None:
     """
     交易系统初始化函数 - 清理未来数据确保模拟一致性
 
@@ -1027,6 +1029,9 @@ def init_system(current_date: pd.Timestamp, db_path: str, forum_db: str) -> None
             except Exception as e:
                 conn.rollback()
                 raise e
+
+        if not clean_forum:
+            return
 
         # 清理论坛数据库
         with sqlite3.connect(forum_db) as conn:
