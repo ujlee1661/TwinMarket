@@ -31,7 +31,7 @@
    - 价格优先：买方出价高者优先，卖方要价低者优先
    - 时间优先：同价格下，先下单者优先
    - 最大成交量原则：在符合价格的订单中寻找最大成交量
-   - 涨跌停限制：成交价必须在涨跌停范围内（上一日收盘价±10%）
+   - 涨跌停限制：成交价必须在涨跌停范围内（上一日收盘价±30%）
 
 3. 输出结果：
    a) daily_summary_{date}.csv：每日交易汇总
@@ -108,7 +108,7 @@ results = process_trading_day(decisions, last_prices, current_date)
 
 注意事项：
 1. 所有交易数量必须为正整数
-2. 交易价格必须在涨跌停范围内（上一日收盘价±10%）
+2. 交易价格必须在涨跌停范围内（上一日收盘价±30%）
 3. 时间戳不允许重复
 4. 输出目录默认为 'simulation_results'
 5. 大单判定标准为单笔成交金额≥100万
@@ -264,7 +264,7 @@ def calculate_closing_price(
     1. 价格优先：买方出价高者优先，卖方要价低者优先
     2. 时间优先：同价格下，先下单者优先
     3. 最大成交量原则：选择能产生最大成交量的价格作为成交价
-    4. 涨跌停限制：成交价必须在上日收盘价±10%范围内
+    4. 涨跌停限制：成交价必须在上日收盘价±30%范围内
     5. 时间戳去重：自动处理重复时间戳问题
 
     算法流程：
@@ -317,8 +317,8 @@ def calculate_closing_price(
     fix_duplicate_timestamps(sell_orders)
 
     # 计算涨跌停限制
-    upper_limit = last_price * 1.1
-    lower_limit = last_price * 0.9
+    upper_limit = last_price * 1.3
+    lower_limit = last_price * 0.7
 
     # 可以添加调试信息
     # if len(buy_orders) > 1:

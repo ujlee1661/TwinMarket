@@ -154,6 +154,7 @@ class PersonalizedStockTrader:
         # 用户状态配置
         self.is_activate_user = is_activate_user  # 用户是否激活
         self.belief = belief  # 用户信念值
+        self.use_community = use_community
 
         # ============================ 核心数据初始化 ============================
         # 用户相关数据
@@ -236,10 +237,7 @@ class PersonalizedStockTrader:
                         * self.user_profile["total_value"]
                         / target_price
                     )
-                    if quantity < 100:
-                        quantity = 100
-                    else:
-                        quantity = (quantity // 100) * 100  # 向下取整为100的倍数
+                    quantity = int(quantity)
 
                     # 如果是卖出操作，确保不超过当前持仓数量
                     if action == "sell" and stock_code in self.user_profile.get(
@@ -253,7 +251,7 @@ class PersonalizedStockTrader:
                         quantity = (quantity // 100) * 100
 
                     # 拆单逻辑
-                    if quantity >= 100:
+                    if quantity >= 1:
                         decision["sub_orders"] = [
                             {"quantity": quantity, "price": float(target_price)}
                         ]
@@ -530,8 +528,11 @@ class PersonalizedStockTrader:
                 max_return=5,
             )
 
-            self.forum_args, self.forum_summary = self._forum_action()
-            print_debug(f"self.forum_args: {self.forum_args}", debug)
+            if self.use_community:
+                self.forum_args, self.forum_summary = self._forum_action()
+                print_debug(f"self.forum_args: {self.forum_args}", debug)
+            else:
+                self.forum_args, self.forum_summary = None, None
             self.conversation_history.append(
                 {"role": "user", "content": self.forum_summary}
             )
@@ -584,7 +585,7 @@ class PersonalizedStockTrader:
             # 选择待交易的股票 TODO：可能为空
             if self.is_trading_day and not self.is_random_trader:
                 start_time = time.time()
-                self.stocks_to_deal = self._choose_stocks()
+                self.stocks_to_deal = ["005930"]
                 print_debug(
                     f"选择待交易的股票耗时: {time.time() - start_time:.2f}秒", debug
                 )
@@ -804,8 +805,8 @@ class PersonalizedStockTrader:
             if not selected_row.empty:
                 pre_close_price = float(selected_row.iloc[0]["close_price"])
                 # 计算涨跌停价格（假设是10%的限制）
-                limit_up = round(pre_close_price * 1.1, 2)
-                limit_down = round(pre_close_price * 0.9, 2)
+                limit_up = round(pre_close_price * 1.3, 2)
+                limit_down = round(pre_close_price * 0.7, 2)
 
                 price_limits[stock_code] = {
                     "pre_close": pre_close_price,
