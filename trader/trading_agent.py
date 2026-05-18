@@ -1019,13 +1019,27 @@ class PersonalizedStockTrader:
         else:
             return ""
 
-        news_results_list = self.InformationDataBase.search_news_batch(
-            start_date=current_date - pd.Timedelta(days=7),
-            end_date=current_date,
-            queries=queries,
-            top_k=2,
-            type=None,
-        )
+        try:
+            news_results_list = self.InformationDataBase.search_news_batch(
+                start_date=current_date - pd.Timedelta(days=7),
+                end_date=current_date,
+                queries=queries,
+                top_k=2,
+                type=None,
+            )
+        except Exception as exc:
+            fallback_news = self.import_news or []
+            fallback_items = [
+                {
+                    "content": str(item),
+                    "datetime": current_date.strftime("%Y-%m-%d"),
+                }
+                for item in fallback_news[:2]
+            ]
+            print(
+                f"[news fallback] FAISS search failed for user {self.user_id}: {repr(exc)}"
+            )
+            news_results_list = [fallback_items for _ in queries]
 
         result_str = ""
 
@@ -1313,7 +1327,8 @@ class PersonalizedStockTrader:
         Returns:
             list: A list of all recommended stock IDs.
         """
-        df = pd.read_csv(STOCK_PROFILE_PATH2)
+        df = pd.read_csv(STOCK_PROFILE_PATH2, dtype={"stock_id": str})
+        df["stock_id"] = df["stock_id"].str.zfill(6)
 
         # Filter out stocks that are already in the current portfolio
         available_stocks = df[~df["stock_id"].isin(self.stock_codes)]
@@ -1415,7 +1430,8 @@ class PersonalizedStockTrader:
         return stock_list
 
     def _get_stock_details(self, stock_list: list, type: str = "basic") -> str:
-        df = pd.read_csv(STOCK_PROFILE_PATH2)
+        df = pd.read_csv(STOCK_PROFILE_PATH2, dtype={"stock_id": str})
+        df["stock_id"] = df["stock_id"].str.zfill(6)
         stock_details_str = ""
         # 框定就是只有交易日才会调用
         if type == "full":

@@ -63,3 +63,17 @@ logs*/data/guba_data.csv
 .hf_cache/
 .mplconfig/
 .venv/
+# secrets
+config/api.yaml
+config/embedding.yaml
+.env
+.env.*
+
+# logs
+logs_*/
+
+# database
+*.db
+
+# pickle/vector db
+*.pkl

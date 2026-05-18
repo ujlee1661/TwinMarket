@@ -15,6 +15,7 @@ import os
 import random
 import sqlite3
 import threading
+import traceback
 from contextlib import closing
 from datetime import datetime, timedelta
 from typing import Dict, Literal, Optional
@@ -232,7 +233,8 @@ def process_user_input(
 
     except Exception as e:
         # 异常处理：打印错误信息并返回错误状态
-        print(f"处理用户 {user_id} 时出错: {e}")
+        print(f"处理用户 {user_id} 时出错: {repr(e)}")
+        traceback.print_exc()
         return user_id, {"error": str(e)}, None, None
 
 
@@ -303,8 +305,8 @@ def init_simulation(
 
     # 加载交易日历数据，用于判断当日是否为交易日
     df_trading_days = pd.read_csv(trading_days_path)
-    df_trading_days["pretrade_date"] = pd.to_datetime(df_trading_days["pretrade_date"])
-    trading_days = list(df_trading_days["pretrade_date"].unique())
+    df_trading_days["cal_date"] = pd.to_datetime(df_trading_days["cal_date"])
+    trading_days = set(df_trading_days.loc[df_trading_days["is_open"] == 1, "cal_date"])
 
     # 从数据库加载用户交易策略信息
     conn = sqlite3.connect(user_db)
@@ -328,6 +330,15 @@ def init_simulation(
         # 检查当前日期是否为交易日
         is_trading_day = current_date in trading_days
 
+        if not is_trading_day:
+            print(f"\n=== 当前日期: {current_date.strftime('%Y-%m-%d')} ===")
+            print("交易日: False")
+            update_profiles_table_holiday(
+                current_date=current_date.strftime("%Y-%m-%d"), db_path=user_db
+            )
+            current_date += timedelta(days=1)
+            continue
+
         # 根据是否为交易日加载相应的股票数据
         if is_trading_day:
             # 交易日：从数据库加载股票数据
@@ -340,7 +351,8 @@ def init_simulation(
             df_stock = None
 
         # 获取当日对应的新闻信息
-        import_news = df_news[df_news["cal_date"] == current_date].iloc[0]["news"]
+        current_news = df_news[df_news["cal_date"] == current_date]
+        import_news = current_news.iloc[0]["news"] if not current_news.empty else []
         # # 获取当天对应的新闻
         # if not day_1st:
         #     import_news = df_news[df_news['cal_date'] == current_date].iloc[0]['news']

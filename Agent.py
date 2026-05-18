@@ -12,12 +12,21 @@ import time
 
 # 第三方库导入
 import yaml
-from openai import OpenAI  # OpenAI官方客户端库
-from tenacity import retry, wait_fixed, stop_after_attempt  # 重试机制库
+from openai import BadRequestError, OpenAI  # OpenAI官方客户端库
+from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_not_exception_type  # 重试机制库
 
 # ============================ 全局配置 ============================
 # 默认系统提示词
 sys_default_prompt = "You are a helpful assistant."
+
+
+def _provider_float(value):
+    value = float(value)
+    if value.is_integer():
+        if value <= 0:
+            return 0.01
+        return value - 0.01
+    return value
 
 
 class BaseAgent:
@@ -78,12 +87,19 @@ class BaseAgent:
         Returns:
             dict: 包含响应内容和token使用情况的字典
         """
+        if isinstance(response, str):
+            return {"response": response, "total_tokens": 0}
+
         return {
             "response": response.choices[0].message.content,  # 提取AI生成的文本内容
             "total_tokens": response.usage.total_tokens,  # 提取总的token使用数量
         }
 
-    @retry(wait=wait_fixed(1000), stop=stop_after_attempt(10))
+    @retry(
+        wait=wait_fixed(1),
+        stop=stop_after_attempt(10),
+        retry=retry_if_not_exception_type(BadRequestError),
+    )
     def __call_api(
         self,
         messages,
@@ -120,11 +136,11 @@ class BaseAgent:
             response = self.client.chat.completions.create(
                 model=self.model_name,  # 模型名称
                 messages=messages,  # 对话消息
-                temperature=temperature,  # 控制输出的创意性
+                temperature=_provider_float(temperature),  # 控制输出的创意性
                 max_tokens=max_tokens,  # 最大生成长度
-                top_p=top_p,  # 核采样参数
-                frequency_penalty=frequency_penalty,  # 频率惩罚
-                presence_penalty=presence_penalty,  # 存在惩罚
+                top_p=_provider_float(top_p),  # 核采样参数
+                frequency_penalty=float(frequency_penalty),  # 频率惩罚
+                presence_penalty=float(presence_penalty),  # 存在惩罚
                 **kwargs,  # 其他参数
             )
             return response
